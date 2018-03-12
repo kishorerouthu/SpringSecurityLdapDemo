@@ -1,0 +1,128 @@
+<beans xsi:schemaLocation="http://www.springframework.org/schema/beans
+            http://www.springframework.org/schema/beans/spring-beans.xsd
+            http://www.springframework.org/schema/security
+            http://www.springframework.org/schema/security/spring-security.xsd"
+       xmlns="http://www.springframework.org/schema/beans"
+       xmlns:security="http://www.springframework.org/schema/security"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+
+    <security:http auto-config="false" authentication-manager-ref="authenticationManager" entry-point-ref="authEntryPoint">
+        <security:csrf disabled="true"/>
+        <security:intercept-url pattern="/j_spring_security_check" access="permitAll"/>
+        <security:intercept-url pattern="/j_spring_security_logout" access="permitAll"/>
+        <security:intercept-url pattern="/home" access="isAuthenticated()"/>
+        <security:intercept-url pattern="/login" access="permitAll"/>
+        <security:intercept-url pattern="/" access="isAuthenticated()"/>
+        <security:intercept-url pattern="/**" access="isAuthenticated()"/>
+        <security:custom-filter ref="logoutFilter" position="LOGOUT_FILTER"/>
+        <security:custom-filter ref="authenticationFilter" position="FORM_LOGIN_FILTER"/>
+    </security:http>
+
+    <security:authentication-manager id="authenticationManager">
+        <security:authentication-provider ref="ldapAuthenticationProvider"/>
+    </security:authentication-manager>
+
+    <bean id="authEntryPoint" class="org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint">
+        <constructor-arg value="/login"/>
+    </bean>
+
+
+    <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="ignoreUnresolvablePlaceholders" value="true"/>
+        <property name="location">
+            <value>classpath:ldapConfig.properties</value>
+        </property>
+    </bean>
+
+
+    <!-- Handlers Configuration -->
+        <!-- Logout Handlers -->
+    <bean id="logoutSuccessHandler" class="org.springframework.security.web.authentication.logout.SimpleUrlLogoutSuccessHandler"/>
+    <bean id="securityContextLogoutHandler" class="org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler"/>
+
+        <!-- Authentication Handlers -->
+    <bean id="authenticationSuccessHandler" class="org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler">
+        <property name="defaultTargetUrl" value="/home"/>
+    </bean>
+    <bean id="authenticationFailureHandler" class="org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler">
+        <property name="defaultFailureUrl" value="/login"/>
+    </bean>
+
+
+
+    <!-- Filters Configuration -->
+        <!-- Logout Filter -->
+    <bean id="logoutFilter" class="org.springframework.security.web.authentication.logout.LogoutFilter">
+        <constructor-arg index="0" ref="logoutSuccessHandler"/>
+        <constructor-arg index="1">
+            <list>
+                <ref bean="securityContextLogoutHandler"/>
+            </list>
+        </constructor-arg>
+        <property name="filterProcessesUrl" value="/j_spring_security_logout"/>
+    </bean>
+
+        <!-- Authentication Filter -->
+    <bean id="authenticationFilter" class="org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter">
+        <property name="authenticationManager" ref="authenticationManager"/>
+        <property name="authenticationSuccessHandler" ref="authenticationSuccessHandler"/>
+        <property name="authenticationFailureHandler" ref="authenticationFailureHandler"/>
+        <property name="filterProcessesUrl" value="/j_spring_security_check"/>
+        <property name="usernameParameter" value="j_username"/>
+        <property name="passwordParameter" value="j_password"/>
+    </bean>
+
+    <!-- LDAP authentication provider configuration -->
+    <bean id="ldapAuthenticationProvider" class="org.springframework.security.ldap.authentication.LdapAuthenticationProvider">
+        <constructor-arg index="0" ref="ldapBindAuthenticator"/>
+        <constructor-arg index="1" ref="ldapAuthoritiesPopulator"/>
+        <property name="authoritiesMapper" ref="authoritiesMapper"/>
+    </bean>
+
+    <bean id="ldapContextSource" class="com.css.spring.security.LdapSecurityContextSource">
+        <constructor-arg value="${ldap.url}" />
+    </bean>
+
+    <bean id="ldapBindAuthenticator" class="org.springframework.security.ldap.authentication.BindAuthenticator">
+        <constructor-arg ref="ldapContextSource"/>
+        <property name="userSearch">
+            <bean class="org.springframework.security.ldap.search.FilterBasedLdapUserSearch">
+                <constructor-arg index="0" value="${ldap.groupSearchBase}"/>
+                <constructor-arg index="1" value="(${ldap.userSearchPattern})"/>
+                <constructor-arg index="2" ref="ldapContextSource"/>
+            </bean>
+        </property>
+        <property name="userDnPatterns">
+            <list>
+                <value>${ldap.userSearchPattern}</value>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="ldapAuthoritiesPopulator" class="org.springframework.security.ldap.userdetails.DefaultLdapAuthoritiesPopulator">
+        <constructor-arg ref="ldapContextSource"/>
+        <constructor-arg>
+            <value>${ldap.groupSearchBase}</value>
+        </constructor-arg>
+        <property name="groupRoleAttribute">
+            <value>${ldap.groupRoleAttribute}</value>
+        </property>
+        <property name="groupSearchFilter">
+            <value>${ldap.groupSearchFilter}</value>
+        </property>
+    </bean>
+
+    <bean id="authoritiesMapper" class="org.springframework.security.core.authority.mapping.SimpleAuthorityMapper">
+        <property name="prefix">
+            <value>ROLE_</value>
+        </property>
+        <property name="defaultAuthority">
+            <value>ROLE_DEFAULT_NO_ROLES</value>
+        </property>
+        <property name="convertToUpperCase">
+            <value>false</value>
+        </property>
+    </bean>
+
+</beans>
